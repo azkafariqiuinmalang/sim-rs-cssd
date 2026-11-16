@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}SteriTrack CSSD{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='cssd.css', v='6') }}">
+</head>
+<body{% if not g.actor %} class="public"{% endif %}>
+<a class="skip-link" href="#main">Lewati ke konten</a>
+<header class="topbar">
+  <div class="bar">
+    <a class="brand" href="{{ url_for('web.dashboard') }}">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span>SteriTrack <small>CSSD</small></span>
+    </a>
+    {% if g.actor %}
+    <div class="identity">
+      <span class="identity-text"><strong>{{ g.actor.name }}</strong><small>{{ role_labels[g.actor.role] }}</small></span>
+      <form method="post" action="{{ url_for('web.logout') }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="secondary">Keluar</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+</header>
+<div class="{{ 'workspace' if g.actor else 'public-shell' }}">
+  {% if g.actor %}{% include "navigation.html" %}{% endif %}
+  <div class="app-content">
+    <main id="main" tabindex="-1">
+      {% block content %}{% endblock %}
+    </main>
+    <footer>Lingkungan simulasi · Data sintetis</footer>
+  </div>
+</div>
+</body>
+</html>

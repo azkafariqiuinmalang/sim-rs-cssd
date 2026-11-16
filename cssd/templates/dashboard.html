@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% from "forms.html" import status_badge, tokens %}
+{% set title = modules[module][0] if module else 'Dashboard ' ~ role_labels[g.actor.role] %}
+{% block title %}{{ title }} · SteriTrack CSSD{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    <p class="eyebrow">{{ unit }}</p>
+    <h1>{{ title }}</h1>
+    {% if module %}<p>{{ modules[module][1] }}</p>
+    {% elif g.actor.role == 'petugas_cssd' %}
+    <p>Pilih antrean untuk melanjutkan pekerjaan CSSD.</p>
+    {% elif g.actor.role == 'petugas_unit' %}
+    <p>Ajukan kebutuhan alat dan pantau peminjaman unitmu.</p>
+    {% endif %}
+  </div>
+  {% if g.actor.role == 'petugas_unit' %}
+  <a class="button primary" href="{{ url_for('web.new_need') }}">Ajukan peminjaman <span aria-hidden="true">↗</span></a>
+  {% elif g.actor.role == 'supervisor' %}
+  <a class="button primary" href="{{ url_for('web.reports') }}">Buka laporan <span aria-hidden="true">↗</span></a>
+  {% endif %}
+</section>
+
+{% if actions is not none %}
+<section class="action-queue" aria-labelledby="action-heading">
+  <h2 id="action-heading">Perlu ditindaklanjuti</h2>
+  {% if actions %}
+  <ul class="records action-list">
+    {% for action in actions %}
+    <li><a href="{{ action.url }}">
+      <span class="queue-label">{{ action.label }}</span>
+      {% if action.total is defined %}<strong class="queue-count">{{ action.total }}</strong>{% endif %}
+      <span class="queue-arrow" aria-hidden="true">→</span>
+    </a></li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="empty">Tidak ada penerimaan yang menunggu konfirmasimu.</p>{% endif %}
+</section>
+{% endif %}
+
+{% if not module %}
+  {% set counts = [
+    ('Siap dipinjam', containers|selectattr('state', 'equalto', 'AVAILABLE')|list|length, 'available'),
+    ('Sedang disterilisasi', containers|selectattr('state', 'equalto', 'PROCESSING')|list|length, 'processing'),
+    ('Dipinjam', containers|selectattr('state', 'equalto', 'BORROWED')|list|length, 'borrowed')
+  ] %}
+  <dl class="stock-strip" aria-label="Ringkasan kontainer">
+    {% for label, total, tone in counts if tone != 'processing' or g.actor.role != 'petugas_unit' %}
+    <div class="stock-{{ tone }}"><dt>{{ 'Dipinjam unit ini' if tone == 'borrowed' and g.actor.role == 'petugas_unit' else label }}</dt><dd>{{ total }}</dd></div>
+    {% endfor %}
+  </dl>
+{% endif %}
+
+<div class="dashboard-columns{% if not show_loans %} dashboard-single{% endif %}">
+  <section class="panel inventory" id="daftar-kontainer">
+    <div class="section-head">
+      <h2>{{ 'Kontainer' if module != 'gudang' else 'Stok siap dipinjam' }}</h2>
+      <span class="row-count">{{ containers|length }} kontainer</span>
+    </div>
+    {% if status %}
+    <div class="queue-filter">{{ status_badge(status) }}
+      <a href="{{ url_for('web.dashboard', modul=module, _anchor='daftar-kontainer') }}">Tampilkan semua status</a>
+    </div>
+    {% endif %}
+    <form action="{{ url_for('web.lookup') }}" class="inline lookup">
+      <label>Kode label atau ID QR<input name="code" required maxlength="100" placeholder="C-001"></label>
+      <button class="secondary">Cari kontainer</button>
+    </form>
+    {% set can_create_batch = module == 'sterilisasi' and (containers | selectattr('state', 'equalto', 'PACKAGED') | list) %}
+    {% if can_create_batch %}
+    <form id="create-batch" class="inline allocation" method="post" action="{{ url_for('web.create_batch') }}">
+      {{ tokens(csrf,key) }}
+      <label>Referensi batch <input name="reference" maxlength="200" required></label>
+      <button>Mulai batch terpilih</button>
+    </form>
+    {% endif %}
+    {% if containers %}
+    <div class="scroll" tabindex="0" role="region" aria-label="Daftar kontainer">
+      <table class="inventory-table">
+        <thead><tr>{% if can_create_batch %}<th scope="col">Pilih untuk batch</th>{% endif %}<th scope="col">Kontainer</th><th scope="col">Status</th></tr></thead>
+        <tbody>{% for c in containers %}
+          <tr>{% if can_create_batch %}<td>{% if c.state == 'PACKAGED' %}
+            <label class="check"><input form="create-batch" type="checkbox" name="cycles" value="{{ c.cycle_id }}" aria-label="Pilih {{ c.label }}"></label>
+          {% endif %}</td>{% endif %}<td><a class="record-link" href="{{ url_for('web.container', qr=c.qr) }}">{{ c.label }}</a><small>{{ c.set_name }}</small></td>
+          <td>{{ status_badge(c.state) }}</td></tr>
+        {% endfor %}</tbody>
+      </table>
+    </div>
+    {% else %}<p class="empty">Belum ada kontainer untuk ditampilkan.</p>{% endif %}
+    {% if page > 1 or has_next %}
+    <nav class="need-options" aria-label="Halaman kontainer">
+      {% if page > 1 %}<a href="{{ url_for('web.dashboard', modul=module, status=status or none, halaman=page-1, _anchor='daftar-kontainer') }}">Sebelumnya</a>{% endif %}
+      <span>Halaman {{ page }}</span>
+      {% if has_next %}<a href="{{ url_for('web.dashboard', modul=module, status=status or none, halaman=page+1, _anchor='daftar-kontainer') }}">Berikutnya</a>{% endif %}
+    </nav>
+    {% endif %}
+  </section>
+
+  {% if show_loans %}
+  <div class="dashboard-side">
+    {% if g.actor.role == 'supervisor' %}
+    <section class="panel"><h2>Notifikasi selisih</h2>
+      <ul class="records">{% for case in cases %}
+        <li><a href="{{ url_for('web.case_detail', case_id=case.id) }}">Kasus #{{ case.id }}</a>{{ status_badge(case.status) }}</li>
+      {% else %}<li class="empty">Belum ada kasus.</li>{% endfor %}</ul>
+    </section>
+    {% endif %}
+    <section class="panel"{% if module == 'gudang' %} id="antrean-gudang"{% endif %}>
+      <h2>{{ 'Peminjaman unit' if g.actor.role == 'petugas_unit' else ('Antrean persiapan dan serah terima' if module == 'gudang' else 'Transaksi terakhir') }}</h2>
+      <ul class="records transaction-list">{% for loan in loans %}
+        <li><div><a href="{{ url_for('web.loan_detail', loan_id=loan.id) }}">Pinjaman #{{ loan.id }}</a>
+          {% if g.actor.role == 'petugas_unit' %}
+            {% for item in loan_contents.get(loan.id, []) %}<small>{{ item.label }} · {{ item.set_name }}</small>{% else %}
+              {% if loan.state in ('REQUESTED', 'PICKING') %}<small>Menunggu alokasi kemasan</small>{% endif %}
+            {% endfor %}
+          {% else %}<small>{{ loan.unit }}</small>{% endif %}
+          {% if loan.needed_at and loan.state in ('REQUESTED', 'PICKING') %}<small>Dibutuhkan {{ loan.needed_at | localtime }}</small>{% endif %}
+        </div>
+          {{ status_badge(loan.state, loan_status_labels[loan.state]) }}</li>
+      {% else %}<li class="empty">{{ 'Tidak ada permintaan yang perlu diproses.' if module == 'gudang' else 'Belum ada transaksi.' }}</li>{% endfor %}</ul>
+    </section>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

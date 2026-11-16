@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% from "forms.html" import tokens %}
+{% block content %}
+<a class="back-link" href="{{ url_for('web.dashboard') }}">← Ringkasan</a>
+<section class="page-head"><h1>Ajukan peminjaman</h1></section>
+<a class="back-link" href="{{ url_for('web.new_need') }}">Ajukan berdasarkan nama dan jumlah</a>
+<form class="loan-basket" method="post" id="basket" data-preview-url="{{ url_for('web.container_preview') }}">
+  {{ tokens(csrf,key) }}
+  <div class="panel loan-catalog">
+    <div class="loan-filter" id="loan-filter" role="group" aria-label="Jenis peminjaman" hidden>
+      <button type="button" aria-controls="set-stock" aria-pressed="false" data-kind="set">Set kontainer</button>
+      <button type="button" aria-controls="piece-stock" aria-pressed="false" data-kind="piece">Alat satuan</button>
+    </div>
+    <div id="codes" data-default="{{ 'piece' if instruments and not sets else 'set' }}">
+      <section id="set-stock" aria-labelledby="sets-title">
+        <h2 id="sets-title">Set siap dipinjam</h2>
+        {% if not sets %}<p class="stock-empty">Belum ada set yang siap dipinjam.</p>{% endif %}
+        <ul class="records check-list" data-scanned>
+          {% for item in sets %}
+          <li><label class="check"><input type="checkbox" name="containers" value="{{ item.qr }}" data-kind="set" data-label="{{ item.label }}">
+            {{ item.label }} · {{ item.set_name }}
+          </label></li>
+          {% endfor %}
+        </ul>
+      </section>
+      <section id="piece-stock" aria-labelledby="pieces-title">
+        <h2 id="pieces-title">Alat siap dipinjam</h2>
+        {% if instruments %}
+        <p>Pilih jumlah alat dari stok kemasan satuan yang siap dipinjam.</p>
+        <ul class="records piece-list">
+          {% for group in instruments %}
+          <li class="piece-group">
+            <div><strong>{{ group.name }}</strong><small>{{ group.packages|length }} alat tersedia</small></div>
+            <label class="piece-quantity" hidden>Jumlah
+              <select class="piece-count" aria-label="Jumlah {{ group.name }}">
+                {% for qty in range([group.packages|length, 20]|min + 1) %}
+                <option value="{{ qty }}">{{ qty }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <details class="piece-packages">
+              <summary>Pilih kode kemasan</summary>
+              <ul class="records check-list">
+                {% for item in group.packages %}
+                <li><label class="check"><input type="checkbox" name="containers" value="{{ item.qr }}" data-kind="piece" data-label="{{ item.label }}">
+                  {{ item.label }}
+                </label></li>
+                {% endfor %}
+              </ul>
+            </details>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="stock-empty">Belum ada alat satuan yang siap dipinjam.</p>
+        {% endif %}
+        <ul class="records check-list" data-scanned></ul>
+      </section>
+    </div>
+    <div class="inline loan-scan" id="scan-controls" hidden>
+      <label>Kode label atau hasil scan QR <input id="scan-code" maxlength="400" autocomplete="off" placeholder="C-001"></label>
+      <button type="button" class="secondary" id="add-code">Tambahkan kode</button>
+      <button type="button" class="secondary" id="start-camera">Scan kamera</button>
+    </div>
+    <video id="preview" hidden muted playsinline></video>
+    <p id="scan-message" role="status"></p>
+  </div>
+  <aside class="panel loan-summary" aria-labelledby="loan-summary-title">
+    <h2 id="loan-summary-title">Ringkasan pengajuan</h2>
+    <dl id="loan-totals" aria-live="polite" aria-atomic="true" hidden>
+      <div><dt>Set kontainer</dt><dd id="selected-sets">0</dd></div>
+      <div><dt>Alat satuan</dt><dd id="selected-pieces">0</dd></div>
+    </dl>
+    <button type="submit">Ajukan ke gudang</button>
+  </aside>
+</form>
+<script src="{{ url_for('static', filename='scan.js', v='2') }}" defer></script>
+{% endblock %}

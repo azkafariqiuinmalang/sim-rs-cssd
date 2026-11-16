@@ -1,0 +1,28 @@
+{% macro nav_link(endpoint, label, selected, section=none) -%}
+<a href="{{ url_for(endpoint, modul=section) if section else url_for(endpoint) }}"{% if selected %} aria-current="page"{% endif %}>{{ label }}</a>
+{%- endmacro %}
+{% set endpoint = request.endpoint %}
+{% set role = g.actor.role %}
+{% set section = request.args.get('modul') if endpoint == 'web.dashboard' else none %}
+<nav class="work-nav" aria-label="Navigasi utama">
+  <p>Ruang kerja</p>
+  {{ nav_link('web.dashboard', 'Ringkasan', endpoint == 'web.dashboard' and not section) }}
+  {% if role == 'petugas_cssd' %}
+    <p>Operasional CSSD</p>
+    {{ nav_link('web.dashboard', 'Setting Alat', section == 'setting', 'setting') }}
+    {{ nav_link('web.dashboard', 'Sterilisasi', section == 'sterilisasi', 'sterilisasi') }}
+    {{ nav_link('web.dashboard', 'Quality Control', section == 'qc', 'qc') }}
+    {{ nav_link('web.dashboard', 'Gudang', section == 'gudang', 'gudang') }}
+    {{ nav_link('web.dashboard', 'Dekontaminasi', section == 'dekontaminasi', 'dekontaminasi') }}
+    {{ nav_link('web.dashboard', 'Riwayat kontainer', section == 'riwayat', 'riwayat') }}
+  {% elif role == 'petugas_unit' %}
+    {{ nav_link('web.new_need', 'Ajukan peminjaman', endpoint in ('web.new_need', 'web.new_loan')) }}
+  {% elif role == 'admin' %}
+    {{ nav_link('web.master', 'Master data', endpoint == 'web.master') }}
+    {{ nav_link('web.accounts', 'Akun petugas', endpoint == 'web.accounts') }}
+    {{ nav_link('web.audit', 'Log aktivitas', endpoint == 'web.audit') }}
+  {% elif role == 'supervisor' %}
+    {{ nav_link('web.reports', 'Laporan', endpoint == 'web.reports') }}
+    {{ nav_link('web.audit', 'Log aktivitas', endpoint == 'web.audit') }}
+  {% endif %}
+</nav>

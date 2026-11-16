@@ -1,0 +1,73 @@
+{% macro tokens(csrf, key) %}
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="key" value="{{ key() }}">
+{% endmacro %}
+{% macro catalog_item(name, field, maximum, quantity_unit='alat', value='') %}
+<div class="request-item" data-catalog-item data-catalog-name="{{ name }}" data-quantity-unit="{{ quantity_unit }}">
+  <label for="quantity-{{ field }}">{{ name }}</label>
+  <div class="request-quantity">
+    <button type="button" class="secondary" data-step="-1" aria-label="Kurangi {{ name }}" hidden>−</button>
+    <input id="quantity-{{ field }}" type="number" inputmode="numeric" name="{{ field }}"
+      min="1" max="{{ maximum }}" value="{{ value }}" placeholder="0" aria-label="Jumlah {{ name }}">
+    <button type="button" class="secondary" data-step="1" aria-label="Tambah {{ name }}" hidden>+</button>
+  </div>
+</div>
+{% endmacro %}
+{% macro confirm(label) %}
+<label class="check"><input type="checkbox" name="physical_check" value="yes" required> {{ label }}</label>
+{% endmacro %}
+{% macro count_items(items, returning=false) %}
+{% for entry in items %}
+  <div class="count-row">
+    <div><strong>{{ entry.name }}</strong><br><small>{{ 'Jumlah saat handover' if returning else 'Jumlah template' }} · {{ entry.verified if returning else entry.expected }}</small></div>
+    <label>Jumlah fisik <input name="qty_{{ entry.instrument_id }}" type="number" inputmode="numeric" min="0" max="99999" required></label>
+    <label>Kondisi atau catatan <input name="note_{{ entry.instrument_id }}" maxlength="200"></label>
+  </div>
+{% endfor %}
+{% endmacro %}
+{% macro return_checklist(items) %}
+<p>Hitung dan periksa kondisi setiap alat. Pilih hasilnya setelah pemeriksaan fisik.</p>
+{% for entry in items %}
+  <fieldset class="return-check">
+    <legend>{{ entry.name }} <small>Diserahkan {{ entry.verified }}</small></legend>
+    <div class="return-choice">
+      <label class="check"><input type="radio" name="count_{{ entry.instrument_id }}" value="match" required> Sesuai</label>
+      <label class="check"><input type="radio" name="count_{{ entry.instrument_id }}" value="different" required> Ada selisih</label>
+    </div>
+    <label class="return-actual">Jumlah kembali
+      <input name="qty_{{ entry.instrument_id }}" type="number" inputmode="numeric" min="0" max="99999">
+    </label>
+    <details><summary>Catatan kondisi</summary><label>Catatan<input name="note_{{ entry.instrument_id }}" maxlength="200"></label></details>
+  </fieldset>
+{% endfor %}
+{% endmacro %}
+{% macro snapshot_table(items, expected_label='Template') %}
+<div class="scroll" tabindex="0" role="region" aria-label="Komposisi instrumen"><table><thead><tr><th scope="col">Instrumen</th><th scope="col">{{ expected_label }}</th><th scope="col">Terverifikasi</th></tr></thead><tbody>
+{% for i in items %}<tr><td>{{ i.name }}</td><td>{{ i.expected }}</td><td>{{ i.verified }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endmacro %}
+
+
+{% macro return_counts(items) %}
+<div class="scroll" tabindex="0" role="region" aria-label="Hitungan pengembalian"><table>
+  <thead><tr><th>Instrumen</th><th>Diserahkan</th><th>Kembali</th><th>Selisih</th><th>Catatan kondisi</th></tr></thead>
+  <tbody>
+    {% for item in items %}
+    <tr><td>{{ item.name }}</td><td>{{ item.expected }}</td><td>{{ item.actual }}</td>
+      <td>{{ item.actual - item.expected }}</td><td>{{ item.condition_note or '-' }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table></div>
+{% endmacro %}
+
+{% macro status_badge(state, label=none) -%}
+{%- set labels = {
+  'DRAFT': 'Perlu verifikasi', 'VERIFIED': 'Terverifikasi', 'PACKAGED': 'Dikemas',
+  'PROCESSING': 'Sedang disterilisasi', 'QC_PENDING': 'Menunggu QC',
+  'AVAILABLE': 'Siap dipinjam', 'BORROWED': 'Dipinjam', 'DIRTY_RECEIVED': 'Menunggu dekontaminasi',
+  'DECONTAMINATED': 'Siap disetting', 'DISCREPANCY': 'Ada selisih',
+  'REJECTED': 'Ditolak QC', 'QUARANTINED': 'Dikarantina',
+  'OPEN': 'Terbuka', 'INVESTIGATING': 'Dalam investigasi', 'RESOLVED': 'Selesai'
+} -%}
+<span class="status status-{{ (state or 'new')|lower }}">{{ label or labels.get(state, state or 'Belum ada siklus') }}</span>
+{%- endmacro %}

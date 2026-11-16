@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% from "forms.html" import tokens %}
+{% block content %}
+<a class="back-link" href="{{ url_for('web.dashboard') }}">← Ringkasan</a>
+<h1>Master data</h1>
+<section class="panel"><h2>Instrumen</h2>
+<ul>{% for i in instruments %}<li>{{ i.name }}</li>{% endfor %}</ul>
+<form method="post" class="inline" action="{{ url_for('web.create_master',kind='instrument') }}">
+  {{ tokens(csrf,key) }}<label>Nama instrumen<input name="name" maxlength="80" required></label><button>Tambah instrumen</button>
+</form>
+</section>
+<section class="panel"><h2>Versi template set</h2>
+<ul>{% for t in templates %}<li>{{ t.name }} · v{{ t.version }}</li>{% endfor %}</ul>
+<form method="post" class="stack" action="{{ url_for('web.create_master',kind='template') }}">
+  {{ tokens(csrf,key) }}<label>Nama set <input name="name" maxlength="80" required></label>
+  {% for i in instruments %}<label>{{ i.name }} <input name="qty_{{ i.id }}" type="number" min="1" max="99999"></label>{% endfor %}
+  <button>Terbitkan versi baru</button>
+</form>
+</section>
+<section class="panel"><h2>Kontainer</h2>
+<ul>{% for c in containers %}<li><a href="{{ url_for('web.container',qr=c.qr) }}">{{ c.label }}</a> · {{ c.name }} v{{ c.version }}</li>{% endfor %}</ul>
+<form method="post" class="inline" action="{{ url_for('web.create_master',kind='container') }}">
+  {{ tokens(csrf,key) }}<label>Label kontainer <input name="label" placeholder="C-003" maxlength="20" required></label>
+  <label>Template <select name="template" required><option value="">Pilih</option>
+  {% for t in templates %}<option value="{{ t.id }}">{{ t.name }} v{{ t.version }}</option>{% endfor %}</select></label>
+  <button>Daftarkan kontainer</button>
+</form>
+</section>
+{% endblock %}
+

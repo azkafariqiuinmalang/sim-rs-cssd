@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% from "forms.html" import tokens, confirm, count_items, return_checklist, snapshot_table, status_badge, catalog_item %}
+{% block content %}
+<a class="back-link" href="{{ url_for('web.dashboard') }}">← Ringkasan</a>
+<section class="page-head">
+  <div><p class="eyebrow">Kontainer {{ item.label }}</p><h1>{{ set_name }}</h1></div>
+  {{ status_badge(cycle.state if cycle else (previous[0].state if previous else none)) }}
+</section>
+{% if g.actor.role != 'petugas_unit' %}
+<details class="panel"><summary>Label QR permanen</summary>
+  <a href="{{ url_for('web.qr_image', qr=item.qr) }}"><img width="168" height="168" alt="QR {{ item.label }}" src="{{ url_for('web.qr_image', qr=item.qr) }}" loading="lazy"></a>
+</details>
+{% endif %}
+{% if cycle %}
+<section class="panel">
+<h2>Siklus {{ cycle.sequence }}</h2>
+{% if preparation %}<p><a href="{{ url_for('web.loan_detail', loan_id=preparation.id) }}">Buka permintaan #{{ preparation.id }}</a></p>{% endif %}
+{% if cycle.verified_at %}<p>Verifikasi setting · {{ cycle.verified_at | localtime }}</p>{% endif %}
+{% if batch %}
+<details{% if batch_members|length > 1 %} open{% endif %}>
+  <summary>Batch {{ batch.reference }} · {{ 'Selesai' if batch.completed_at else 'Dalam proses' }}</summary>
+  <p>Petugas {{ batch.operator }}{% if batch.completed_at %} · Selesai {{ batch.completed_at | localtime }}{% endif %}</p>
+  {% if batch.process_evidence %}<p>Bukti proses {{ batch.process_evidence }}</p>{% endif %}
+  {% if batch_members|length > 1 %}
+  <ul>{% for member in batch_members %}<li><a href="{{ url_for('web.container', qr=member.qr) }}">{{ member.label }}</a> {{ status_badge(member.state) }}</li>{% endfor %}</ul>
+  {% endif %}
+</details>
+{% endif %}
+{% if decision %}<p>Keputusan QC {{ {'RELEASE': 'Dirilis', 'REJECT': 'Ditolak', 'QUARANTINE': 'Dikarantina'}[decision.outcome] }} · Bukti {{ decision.evidence }}</p>{% endif %}
+{% if g.actor.role == 'petugas_cssd' and cycle.state == 'QC_PENDING' and not g.actor.can_release_qc %}
+<p class="alert">Keputusan QC memerlukan izin pada akun petugas.</p>
+{% endif %}
+{% if current %}{{ snapshot_table(current, 'Rencana siklus') }}{% endif %}
+{% if variant %}
+  {% if cycle.state == 'VERIFIED' and cycle.template_id != item.template_id %}
+    <p class="alert">Jumlah fisik berbeda dari rencana set khusus. Lakukan verifikasi ulang sebelum pengemasan.</p>
+    {% if g.actor.role == 'petugas_cssd' %}
+    <form class="stack" method="post" action="{{ url_for('web.cycle_action', cycle_id=cycle.id, action='revise-composition') }}">
+      {{ tokens(csrf,key) }}
+      {% if preparation %}
+      <p>Set ini mengikuti komposisi permintaan unit. Hitung ulang dengan rencana yang sama.</p>
+      {% elif current|selectattr('verified', 'gt', 0)|list %}
+      <p>Jika perubahan jumlah disengaja, gunakan hasil hitung sebagai rencana siklus baru. Jika ada salah input, hitung ulang dengan rencana awal.</p>
+      <button name="mode" value="use-count">Gunakan hasil hitung sebagai rencana baru</button>
+      {% endif %}
+      <button class="secondary" name="mode" value="recount">Hitung ulang dengan rencana yang sama</button>
+    </form>
+    {% endif %}
+  {% else %}
+    <p class="alert">Selisih terhadap template. Kontainer ditahan dalam alur demo.</p>
+  {% endif %}
+{% endif %}
+{% if cycle.state == 'DIRTY_RECEIVED' %}
+<p>Pengembalian sudah dicatat. Setting berikutnya tersedia setelah Petugas CSSD mencatat dekontaminasi selesai.</p>
+{% elif cycle.state == 'DISCREPANCY' %}
+<p>Pengembalian tercatat dengan selisih. Tunggu penyelesaian kasus sebelum melanjutkan dekontaminasi.</p>
+{% endif %}
+{% set role = g.actor.role %}
+{% set form = none %}
+{% if role == 'petugas_cssd' and cycle.state == 'DRAFT' %}{% set form = ('verify', 'Verifikasi komposisi') %}
+{% elif role == 'petugas_cssd' and cycle.state == 'VERIFIED' and not variant %}{% set form = ('pack', 'Catat pengemasan') %}
+{% elif role == 'petugas_cssd' and cycle.state == 'PACKAGED' %}{% set form = ('batch-start', 'Mulai catatan batch') %}
+{% elif role == 'petugas_cssd' and cycle.state == 'PROCESSING' %}{% set form = ('batch-complete', 'Catat batch selesai') %}
+{% elif role == 'petugas_cssd' and g.actor.can_release_qc and cycle.state == 'QC_PENDING' %}{% set form = ('qc', 'Simpan keputusan QC demo') %}
+{% elif role == 'petugas_cssd' and cycle.state == 'DIRTY_RECEIVED' %}{% set form = ('decontaminate', 'Konfirmasi dekontaminasi selesai') %}
+{% endif %}
+{% if role == 'petugas_cssd' and cycle.state == 'DRAFT' %}
+<details class="custom-composition">
+  <summary>{{ 'Ubah komposisi khusus' if custom_quantities else 'Susun komposisi khusus' }}</summary>
+  <form class="request-layout composition-editor" id="request-form" method="post" action="{{ url_for('web.cycle_action', cycle_id=cycle.id, action='composition') }}">
+    {{ tokens(csrf,key) }}
+    <input type="hidden" name="template_id" value="{{ cycle.template_id }}">
+    <section class="panel request-catalog" aria-labelledby="composition-catalog-title">
+      <div class="catalog-toolbar">
+        <div class="section-head">
+          <h3 id="composition-catalog-title">Pilih alat</h3>
+          <a href="#ringkasan-komposisi" class="catalog-review" hidden>Lihat susunan <span id="catalog-selection-count">0</span></a>
+        </div>
+        <div id="catalog-search" hidden>
+          <label for="catalog-query">Cari nama alat</label>
+          <input id="catalog-query" type="search" placeholder="Contoh: pinset atau gunting" autocomplete="off">
+          <div class="section-head">
+            <button type="button" class="catalog-toggle" data-catalog-show-all aria-pressed="false" aria-controls="composition-catalog">Lihat semua alat</button>
+            <p id="catalog-match-count" class="catalog-result" role="status"></p>
+          </div>
+        </div>
+      </div>
+      <noscript><p>Isi jumlah untuk alat yang akan digunakan dalam susunan.</p></noscript>
+      <div class="request-items" data-catalog-group id="composition-catalog">
+        {% for instrument in catalog %}
+          {{ catalog_item(instrument.name, 'qty_' ~ instrument.id, 99999, 'alat', custom_quantities.get(instrument.id, '')) }}
+        {% else %}
+        <p class="empty">Katalog instrumen belum terisi.</p>
+        {% endfor %}
+      </div>
+      <p class="empty" id="catalog-no-match" hidden>Tidak ada alat yang cocok. Coba kata yang lebih pendek.</p>
+    </section>
+    <aside class="panel request-summary" id="ringkasan-komposisi" aria-labelledby="composition-summary-title">
+      <h3 id="composition-summary-title">Susunan alat</h3>
+      <div id="request-selection" hidden>
+        <p class="empty" id="request-empty">Belum ada alat. Cari nama alat, lalu tekan tambah.</p>
+        <ul class="records" id="request-selected"></ul>
+      </div>
+      <p class="composition-note">Setelah menyimpan, lanjutkan ke verifikasi jumlah fisik.</p>
+      <p class="alert" id="request-error" role="alert" hidden>Pilih minimal satu alat sebelum menyimpan.</p>
+      <button name="mode" value="custom">Simpan susunan alat</button>
+      {% if custom_quantities %}<button class="secondary" name="mode" value="standard" formnovalidate>Pakai template standar</button>{% endif %}
+    </aside>
+  </form>
+</details>
+<script src="{{ url_for('static', filename='request-catalog.js', v='2') }}" defer></script>
+{% endif %}
+{% if form %}
+<form class="stack" method="post" action="{{ url_for('web.cycle_action', cycle_id=cycle.id, action=form[0]) }}">
+  <div class="work-step"><h3>{{ form[1] }}</h3>
+    {% if form[0] == 'verify' %}<p>Hitung alat, lalu isi jumlah yang kamu lihat untuk setiap baris.</p>{% endif %}
+  </div>
+  {{ tokens(csrf,key) }}
+  {% if form[0] == 'verify' %}<input type="hidden" name="template_id" value="{{ cycle.template_id }}">{{ count_items(planned) }}{{ confirm('Saya telah menghitung dan memeriksa instrumen secara fisik.') }}{% endif %}
+  {% if form[0] == 'batch-start' %}<label>Referensi batch demo<input name="reference" maxlength="200" required></label>{% endif %}
+  {% if form[0] == 'batch-complete' %}
+    <label>Referensi bukti proses (opsional)<input name="process_evidence" maxlength="200"></label>
+    {% if batch_members|length > 1 %}<p>Semua {{ batch_members|length }} kontainer dalam batch akan masuk antrean QC.</p>{% endif %}
+  {% endif %}
+  {% if form[0] == 'qc' %}
+    <label>Keputusan <select name="outcome" required><option value="">Pilih</option><option value="RELEASE">Rilis ke gudang</option><option value="REJECT">Tolak</option><option value="QUARANTINE">Karantina</option></select></label>
+    <label>Referensi bukti simulasi <input name="evidence" maxlength="200" required></label>
+  {% endif %}
+  {% if form[0] == 'decontaminate' %}<label>Referensi selesai dekontaminasi simulasi <input name="reason" maxlength="200" required></label>{% endif %}
+  <button>{{ form[1] }}</button>
+</form>
+{% endif %}
+{% if return_item and return_item.loan_state in ('RECEIVED', 'PARTIALLY_RETURNED') %}
+<form class="stack return-form" method="post" action="{{ url_for('web.return_container', qr=item.qr, loan_item_id=return_item.id) }}">
+  <h3>Terima pengembalian · pinjaman #{{ return_item.loan_id }}</h3>
+  {{ tokens(csrf,key) }}{{ return_checklist(current) }}
+  {{ confirm('Saya telah menghitung instrumen yang diterima secara fisik.') }}
+  <button>Konfirmasi pengembalian</button>
+</form>
+{% endif %}
+</section>
+{% elif g.actor.role == 'petugas_cssd' %}
+<form method="post" action="{{ url_for('web.start_cycle', qr=item.qr) }}" class="panel">
+  {{ tokens(csrf,key) }}
+  <p>Mulai dengan template standar atau susun isi khusus sebelum verifikasi.</p>
+  <button>Mulai siklus setting</button>
+</form>
+{% endif %}
+{% if previous or history_before %}
+<section class="panel" id="histori"><h2>Histori siklus</h2>
+{% for old in previous %}<details><summary>Siklus {{ old.sequence }} · {{ old.closed_at | localtime }}</summary>
+{% set past_batch = previous_batches.get(old.id) %}
+{% if past_batch %}<p>Batch {{ past_batch.reference }} · {{ past_batch.operator }}{% if past_batch.process_evidence %} · Bukti {{ past_batch.process_evidence }}{% endif %}</p>{% endif %}
+{{ snapshot_table(compositions.get(old.id, [])) }}</details>{% endfor %}
+{% if history_before %}<a href="{{ url_for('web.container', qr=item.qr, _anchor='histori') }}">Histori terbaru</a>{% endif %}
+{% if older %}<a href="{{ url_for('web.container', qr=item.qr, sebelum=previous[-1].sequence, _anchor='histori') }}">Siklus lebih lama</a>{% endif %}
+</section>
+{% endif %}
+{% endblock %}
+

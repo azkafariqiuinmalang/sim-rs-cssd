@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% from "forms.html" import tokens, confirm, status_badge %}
+{% block content %}
+<a class="back-link" href="{{ url_for('web.dashboard') }}">← Ringkasan</a>
+<section class="page-head">
+  <div><p class="eyebrow">{{ loan.unit }}</p><h1>Pinjaman #{{ loan.id }}</h1></div>
+  <div class="loan-header-actions">
+    {{ status_badge(loan.state, loan_status_labels[loan.state]) }}
+    {% if g.actor.role == 'petugas_cssd' and loan.state in ('REQUESTED','PICKING') %}
+    {% if loan.state == 'PICKING' and items %}
+    <a class="button primary" href="#serah-terima">Ke serah terima</a>
+    {% else %}
+    <a class="button primary" href="#tindakan-pinjaman">Ke persiapan</a>
+    {% endif %}
+    {% elif g.actor.role == 'petugas_unit' and loan.state == 'HANDED_OVER' and g.actor.id == loan.received_by %}
+    <a class="button primary" href="#konfirmasi-penerimaan">Ke konfirmasi penerimaan</a>
+    {% endif %}
+  </div>
+</section>
+{% if needs %}
+<section class="panel">
+  <h2>{{ 'Isi set khusus' if needs[0].kind == 'custom' else 'Kebutuhan unit' }}</h2>
+  {% if loan.needed_at %}<p>Dibutuhkan pada {{ loan.needed_at | localtime }}</p>{% endif %}
+  <ul class="records">
+    {% for need in needs %}
+    <li><span>{{ need.item_name }}</span><strong>{{ need.quantity }} {{ 'set' if need.kind == 'set' else 'alat' }}</strong></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+<section class="panel">
+  <h2>Serah terima kontainer</h2>
+  <dl class="loan-meta">
+    <div><dt>Pemohon</dt><dd>{{ loan.requester_name }}</dd></div>
+    {% if loan.warehouse_name %}<div><dt>Diserahkan oleh</dt><dd>{{ loan.warehouse_name }}</dd></div>{% endif %}
+    {% if loan.recipient_name %}<div><dt>Penerima</dt><dd>{{ loan.recipient_name }}</dd></div>{% endif %}
+    {% if loan.received_at %}<div><dt>Konfirmasi penerimaan</dt><dd>{{ loan.received_at | localtime }}</dd></div>{% endif %}
+  </dl>
+  <ul class="records">
+    {% for item in items %}
+    <li><div><strong>{{ item.label }}</strong><small>{{ item.set_name }}</small></div>
+      {% if g.actor.role != 'petugas_unit' and item.return_id %}
+        <a href="{{ url_for('web.return_detail', return_id=item.return_id) }}">Bukti pengembalian</a>
+      {% elif g.actor.role == 'petugas_cssd' and item.handed_at and not item.returned_at and loan.state in ('RECEIVED','PARTIALLY_RETURNED') %}
+        <a href="{{ url_for('web.container', qr=item.qr) }}">Periksa pengembalian</a>
+      {% else %}
+        <span>{{ 'Dikembalikan' if item.returned_at else ('Diserahkan' if item.handed_at else 'Menunggu serah terima') }}</span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% if needs and not items and loan.state != 'CANCELLED' %}
+  <p class="work-step">{{ 'Pilih kontainer di bawah setelah stok tersedia.' if g.actor.role == 'petugas_cssd' and loan.state == 'PICKING' and candidates else 'Kontainer atau kemasan belum dialokasikan.' }}</p>
+  {% endif %}
+  <div id="tindakan-pinjaman">
+  {% if g.actor.role == 'petugas_cssd' and loan.state == 'REQUESTED' %}
+  <form class="stack" method="post" action="{{ url_for('web.loan_action', loan_id=loan.id, action='pick') }}">
+    {{ tokens(csrf,key) }}
+    <button>Mulai persiapan</button>
+  </form>
+  {% endif %}
+  {% if g.actor.role == 'petugas_cssd' and loan.state == 'PICKING' and needs %}
+  <section class="allocation">
+    <h3>Pilih kemasan fisik</h3>
+    {% if candidates %}
+    <form method="post" class="stack" action="{{ url_for('web.loan_action', loan_id=loan.id, action='allocate') }}">
+      {{ tokens(csrf,key) }}
+      <p>Pilih jenis dan jumlah sesuai kebutuhan unit.</p>
+      <ul class="records check-list">
+        {% for item in candidates %}
+        <li><label class="check"><input type="checkbox" name="containers" value="{{ item.qr }}"{% if item.cycle_id in selected_cycles %} checked{% endif %}>
+          {{ item.label }} · {{ item.instrument_name or item.set_name }}
+        </label></li>
+        {% endfor %}
+      </ul>
+      <button>Simpan kemasan terpilih</button>
+    </form>
+    {% else %}
+    <p>Belum ada kemasan siap dipinjam yang sesuai kebutuhan.</p>
+    {% endif %}
+    {% if prepared %}<p>Kontainer persiapan
+      <a href="{{ url_for('web.container', qr=prepared.qr) }}">{{ prepared.label }}</a>
+      {{ status_badge(prepared.state) }}</p>
+    {% endif %}
+    {% if setting_containers %}
+    <form method="post" class="stack" action="{{ url_for('web.prepare_custom', loan_id=loan.id) }}">
+      {{ tokens(csrf,key) }}
+      <label>Kontainer untuk setting <select name="container" required>
+        <option value="">Pilih kontainer</option>
+        {% for container in setting_containers %}
+        <option value="{{ container.id }}">{{ container.label }} · {{ 'Draf standar belum diverifikasi' if container.draft_id else 'Siap mulai siklus' }}</option>
+        {% endfor %}
+      </select></label>
+      <p>Susunan set khusus dari permintaan akan mengisi draf Setting Alat.</p>
+      <button>Mulai setting sesuai permintaan</button>
+    </form>
+    {% elif needs_setting %}
+    <p>Belum ada kontainer yang bisa dipakai untuk memulai setting. Siapkan kontainer lain atau tunggu kontainer selesai diproses dan siap disetting kembali.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+  {% if g.actor.role == 'petugas_cssd' and loan.state == 'PICKING' and items %}
+  <form id="serah-terima" method="post" class="stack" action="{{ url_for('web.loan_action', loan_id=loan.id, action='handover') }}">
+    {{ tokens(csrf,key) }}<input type="hidden" name="allocation" value="{{ allocation }}">
+    <label>Penerima <select name="recipient" required><option value="">Pilih petugas</option>
+    {% for actor in recipients %}<option value="{{ actor.id }}">{{ actor.name }}</option>{% endfor %}</select></label>
+    {{ confirm('Saya sudah memeriksa kontainer fisik dan identitas penerima.') }}
+    <button>Konfirmasi serah terima</button>
+  </form>
+  {% endif %}
+  {% if g.actor.role == 'petugas_unit' and loan.state == 'HANDED_OVER' and g.actor.id == loan.received_by %}
+  <form id="konfirmasi-penerimaan" method="post" class="stack" action="{{ url_for('web.loan_action', loan_id=loan.id, action='receive') }}">
+    {{ tokens(csrf,key) }}{{ confirm('Saya telah menerima seluruh kontainer pada daftar.') }}<button>Konfirmasi penerimaan</button>
+  </form>
+  {% endif %}
+  </div>
+  {% if g.actor.role == 'petugas_cssd' and loan.state in ('REQUESTED','PICKING') %}
+  <details><summary>Batalkan permintaan</summary>
+    <form method="post" class="stack" action="{{ url_for('web.loan_action', loan_id=loan.id, action='cancel') }}">
+      {{ tokens(csrf,key) }}<label>Alasan <input name="reason" maxlength="200" required></label><button class="secondary">Batalkan</button>
+    </form>
+  </details>
+  {% endif %}
+</section>
+{% endblock %}
+

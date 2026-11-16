@@ -1,0 +1,19 @@
+DROP TABLE idempotency;
+DROP TABLE notifications;
+DROP TABLE discrepancy_cases;
+DROP TABLE return_items;
+DROP TABLE returns;
+DROP TABLE loan_items;
+DROP TABLE loans;
+DROP TABLE qc_decisions;
+DROP TABLE batches;
+DROP TABLE cycle_items;
+DROP TABLE cycles;
+DROP TABLE containers;
+DROP TABLE template_items;
+DROP TABLE templates;
+DROP TABLE instruments;
+DROP TABLE audit_events;
+DROP TABLE users;
+DROP TABLE units;
+

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% from "forms.html" import tokens, return_counts %}
+{% block content %}
+<a class="back-link" href="{{ url_for('web.dashboard') }}">← Ringkasan</a>
+<h1>Kasus selisih #{{ case.id }}</h1>
+<section class="panel">
+  <h2>{{ case.label }} <small>{{ case.status }}</small></h2>
+  <p>{{ loan.unit }} · Siklus {{ case.sequence }} ·
+    <a href="{{ url_for('web.loan_detail', loan_id=case.loan_id) }}">Pinjaman #{{ case.loan_id }}</a> ·
+    <a href="{{ url_for('web.return_detail', return_id=case.return_id) }}">Bukti pengembalian</a>
+  </p>
+  <dl>
+    <dt>Diserahkan oleh</dt><dd>{{ loan.warehouse_name }} · {{ loan.handed_over_at | localtime }}</dd>
+    <dt>Penerima di unit</dt><dd>{{ loan.recipient_name }} · {{ loan.received_at | localtime }}</dd>
+    <dt>Diterima kembali oleh CSSD</dt><dd>{{ case.receiver }} · {{ case.received_at | localtime }}</dd>
+  </dl>
+  {{ return_counts(items) }}
+  {% if events %}
+  <h3>Riwayat investigasi</h3>
+  <ul>
+    {% for event in events %}
+    <li>{{ 'Investigasi dimulai' if event.action == 'INVESTIGATE' else 'Kasus ditutup' }}
+      · {{ event.username }} · {{ event.created_at | localtime }}<br>{{ event.reason }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if case.status != 'RESOLVED' %}
+    {% set action = 'investigate' if case.status == 'OPEN' else 'resolve' %}
+    <form method="post" class="stack" action="{{ url_for('web.case_action',case_id=case.id,action=action) }}">
+      {{ tokens(csrf,key) }}<label>Catatan investigasi demo <input name="reason" maxlength="200" required></label>
+      <button>{{ 'Mulai investigasi' if action == 'investigate' else 'Tutup kasus demo' }}</button>
+    </form>
+  {% elif not events %}<p>{{ case.resolution }} · {{ case.resolver or "-" }} · {{ case.resolved_at | localtime }}</p>{% endif %}
+</section>
+{% endblock %}
+

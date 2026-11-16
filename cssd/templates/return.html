@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% from "forms.html" import return_counts %}
+{% block content %}
+<h1>Bukti pengembalian #{{ record.id }}</h1>
+<section class="panel">
+  <h2>{{ record.label }} · Siklus {{ record.sequence }}</h2>
+  <p><a href="{{ url_for('web.loan_detail', loan_id=record.loan_id) }}">Pinjaman #{{ record.loan_id }}</a> · {{ loan.unit }}</p>
+  <p>Diterima kembali oleh {{ record.receiver }} · {{ record.received_at | localtime }}</p>
+  {% if record.case_id %}
+  <p>Selisih tercatat pada kasus #{{ record.case_id }}.
+    {% if g.actor.role == 'supervisor' %}
+    <a href="{{ url_for('web.case_detail', case_id=record.case_id) }}">Buka kasus selisih</a>
+    {% endif %}
+  </p>
+  {% endif %}
+  {{ return_counts(items) }}
+</section>
+{% endblock %}

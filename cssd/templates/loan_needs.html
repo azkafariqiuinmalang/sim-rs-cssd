@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "forms.html" import tokens, catalog_item %}
+{% block title %}Ajukan peminjaman · SteriTrack CSSD{% endblock %}
+{% block content %}
+<a class="back-link" href="{{ url_for('web.dashboard') }}">← Ringkasan</a>
+<section class="page-head">
+  <div>
+    <h1>Ajukan peminjaman</h1>
+    <p>Pilih kebutuhan unit, lalu periksa daftar sebelum mengirim ke CSSD.</p>
+  </div>
+</section>
+<nav class="request-modes" aria-label="Cara pengajuan">
+  <a href="{{ url_for('web.new_need') }}"{% if not custom %} aria-current="page"{% endif %}>Set dan alat satuan</a>
+  <a href="{{ url_for('web.new_need', jenis='khusus') }}"{% if custom %} aria-current="page"{% endif %}>Susun set khusus</a>
+  <a href="{{ url_for('web.new_loan') }}">Pilih kode atau scan QR</a>
+</nav>
+<form class="request-layout" method="post" id="request-form">
+  {{ tokens(csrf,key) }}
+  <section class="panel request-catalog" aria-labelledby="request-catalog-title">
+    <div class="catalog-toolbar">
+      <div class="section-head">
+        <h2 id="request-catalog-title">{{ 'Isi set khusus' if custom else 'Pilih alat atau set' }}</h2>
+        <a href="#ringkasan-pengajuan" class="catalog-review" hidden>Lihat pilihan <span id="catalog-selection-count">0</span></a>
+      </div>
+      <p>{{ 'Isi komposisi untuk satu kontainer khusus.' if custom else 'Tentukan jumlah alat atau set yang dibutuhkan.' }} CSSD akan memilih kemasannya saat persiapan.</p>
+      <div id="catalog-search" hidden>
+        <label for="catalog-query">Cari nama {{ 'alat' if custom else 'alat atau set' }}</label>
+        <input id="catalog-query" type="search" placeholder="{{ 'Contoh: pinset' if custom else 'Contoh: bedah minor atau pinset' }}" autocomplete="off">
+        <p id="catalog-match-count" class="catalog-result" role="status"></p>
+      </div>
+    </div>
+    {% for kind, items in options.items() %}
+    <fieldset class="need-fieldset" data-catalog-group>
+      <legend>{{ {'set':'Set standar','piece':'Alat satuan','custom':'Instrumen'}[kind] }}</legend>
+      {% if items %}
+      <div class="request-items">
+        {% for item in items %}
+        {{ catalog_item(item.name, kind ~ '_' ~ item.id, 99999 if custom else 20, 'set' if kind == 'set' else 'alat') }}
+        {% endfor %}
+      </div>
+      {% else %}<p class="empty">Katalog belum terisi.</p>{% endif %}
+    </fieldset>
+    {% endfor %}
+    <p class="empty" id="catalog-no-match" hidden>Tidak ada hasil. Coba kata yang lebih pendek, misalnya “pinset”.</p>
+  </section>
+  <aside class="panel request-summary" id="ringkasan-pengajuan" aria-labelledby="request-summary-title">
+    <h2 id="request-summary-title">Ringkasan pengajuan</h2>
+    <div id="request-selection" hidden>
+      <p class="empty" id="request-empty">Belum ada pilihan. Tentukan jumlah pada daftar alat.</p>
+      <ul class="records" id="request-selected"></ul>
+    </div>
+    <label for="needed-at">Dibutuhkan pada <small>(WIB, opsional)</small></label>
+    <input id="needed-at" type="datetime-local" name="needed_at">
+    <p class="alert" id="request-error" role="alert" hidden>Pilih minimal satu alat atau set sebelum mengirim.</p>
+    <button type="submit">Kirim permintaan</button>
+  </aside>
+</form>
+<script src="{{ url_for('static', filename='request-catalog.js', v='2') }}" defer></script>
+{% endblock %}

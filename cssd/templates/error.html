@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel"><h1>{{ error.code }} · {{ error.name }}</h1>
+<p role="alert">{{ error.description }}</p>
+<a class="button secondary" href="{{ url_for('web.dashboard') }}">Kembali ke dashboard</a></section>
+{% endblock %}
+

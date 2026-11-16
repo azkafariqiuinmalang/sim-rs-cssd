@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<a class="back-link" href="{{ url_for('web.dashboard') }}">← Ringkasan</a>
+<h1>Log aktivitas</h1>
+<form class="panel toolbar" method="get">
+  <label>Petugas<select name="actor"><option value="">Semua petugas</option>
+    {% for actor in actors %}<option value="{{ actor.id }}"{% if filters.actor == actor.id|string %} selected{% endif %}>{{ actor.username }}</option>{% endfor %}
+  </select></label>
+  <label>Modul<select name="modul"><option value="">Semua modul</option>
+    {% for slug in modules %}<option value="{{ slug }}"{% if filters.modul == slug %} selected{% endif %}>{{ slug|capitalize }}</option>{% endfor %}
+  </select></label>
+  <label>Kontainer<input name="container" value="{{ filters.container }}" placeholder="C-001" maxlength="20"></label>
+  <label>Tanggal (WIB)<input type="date" name="day" value="{{ filters.day }}"></label>
+  <button>Terapkan filter</button>
+</form>
+<section class="panel scroll"><table>
+<thead><tr><th>Waktu</th><th>Petugas</th><th>Tindakan</th><th>Objek</th><th>Catatan</th></tr></thead>
+<tbody>{% for item in events %}
+<tr><td>{{ item.created_at | localtime }}</td><td>{{ item.username }} · #{{ item.actor_id }}</td><td>{{ item.action }}<br><small>{{ action_modules.get(item.action, '')|capitalize }}</small></td>
+<td>{{ item.entity }} #{{ item.entity_id }}
+  {% if item.container_label %}<br>{{ item.container_label }}{% endif %}
+  {% if item.related_cycle and item.entity != 'cycle' %}<br>Siklus #{{ item.related_cycle }}{% endif %}
+  {% if item.related_loan and item.entity != 'loan' %}<br>Pinjaman #{{ item.related_loan }}{% endif %}
+</td><td>{{ item.reason }}
+  <details><summary>Rincian perubahan</summary><code>{{ item.details }}</code></details>
+</td></tr>
+{% else %}<tr><td colspan="5">Belum ada peristiwa.</td></tr>{% endfor %}</tbody>
+</table></section>
+{% endblock %}

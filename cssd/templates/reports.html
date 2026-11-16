@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% from "forms.html" import status_badge %}
+{% block content %}
+<a class="back-link" href="{{ url_for('web.dashboard') }}">← Ringkasan</a>
+<section class="page-head"><h1>Laporan operasional</h1></section>
+<section class="panel"><h2>Status kontainer saat ini</h2>
+<ul class="records">{% for i in inventory %}<li>{{ status_badge(i.state) }}<strong>{{ i.total }}</strong></li>{% else %}<li>Belum ada data.</li>{% endfor %}</ul>
+</section>
+<section class="panel"><h2>Serah terima harian</h2>
+<form class="inline" method="get" action="{{ url_for('web.reports') }}">
+  <label>Tanggal WIB <input type="date" name="day" value="{{ day }}" required></label>
+  <label>Unit <select name="unit"><option value="">Semua unit</option>
+  {% for u in units %}<option value="{{ u.id }}" {% if u.id == unit %}selected{% endif %}>{{ u.name }}</option>{% endfor %}</select></label>
+  <button class="secondary">Terapkan</button>
+  <button type="submit" formaction="{{ url_for('web.download_report') }}">Unduh Excel</button>
+</form>
+<p>{{ loans | length }} transaksi</p>
+<ul class="records">{% for loan in loans %}<li><a href="{{ url_for('web.loan_detail',loan_id=loan.id) }}">#{{ loan.id }} · {{ loan.unit }}</a><span>{{ loan.handed_over_at | localtime }}</span></li>
+{% else %}<li>Belum ada serah terima pada tanggal ini.</li>{% endfor %}</ul>
+</section>
+<div class="report-columns">
+<section class="panel"><h2>Kontainer belum kembali saat ini</h2>
+<ul class="records">
+{% for item in outstanding %}
+  <li><a href="{{ url_for('web.loan_detail', loan_id=item.loan_id) }}">{{ item.label }} · Pinjaman #{{ item.loan_id }}</a>
+    <span>{{ item.unit }} · {{ item.handed_at | localtime }}</span></li>
+{% else %}<li>Tidak ada kontainer yang masih dipinjam.</li>{% endfor %}
+</ul></section>
+<section class="panel" id="kasus-aktif"><h2>Kasus selisih aktif saat ini</h2>
+<ul class="records">
+{% for case in open_cases %}
+  <li><a href="{{ url_for('web.case_detail', case_id=case.id) }}">Kasus #{{ case.id }} · {{ case.label }}</a>
+    <span>{{ case.unit }} · {{ 'Investigasi' if case.status == 'INVESTIGATING' else 'Terbuka' }}</span></li>
+{% else %}<li>Tidak ada kasus yang masih aktif.</li>{% endfor %}
+</ul></section>
+</div>
+{% endblock %}
+
